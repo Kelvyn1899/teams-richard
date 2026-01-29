@@ -55,6 +55,26 @@ app.post('/create-meeting', async (req, res) => {
   try {
     console.log('📥 Payload recebido:', req.body);
 
+    // Suporte múltiplos e-mails
+    const emails = email
+      .split(',')
+      .map(e => e.trim())
+      .filter(e => e.length > 0);
+
+    if (emails.length === 0) {
+      return res.status(400).json({ error: 'Nenhum e-mail válido informado' });
+    }
+
+    const attendees = emails.map(address => ({
+      emailAddress: {
+        address,
+        name: nome
+      },
+      type: 'required'
+    }));
+
+    console.log('📧 E-mails processados:', emails);
+
     const token = await getAccessToken();
 
     const start = bitrixToISO(data);
@@ -74,15 +94,7 @@ app.post('/create-meeting', async (req, res) => {
         dateTime: end,
         timeZone: 'America/Sao_Paulo'
       },
-      attendees: [
-        {
-          emailAddress: {
-            address: email,
-            name: nome
-          },
-          type: 'required'
-        }
-      ],
+      attendees,
       isOnlineMeeting: true,
       onlineMeetingProvider: 'teamsForBusiness'
     };
@@ -100,42 +112,32 @@ app.post('/create-meeting', async (req, res) => {
 
     console.log('✅ Reunião criada:', {
       id: response.data.id,
-      joinUrl
+      joinUrl,
+      totalAttendees: attendees.length
     });
 
-    // 🔹 Atualiza o campo do Bitrix
-    const bitrixPayload = {
+    // Preenche o campo do Bitrix com o link da reunião gerada
+    await axios.post(BITRIX_WEBHOOK_URL, {
       id: cardId,
       entityTypeId,
       fields: {
         ufCrm67_1705518728148: joinUrl
       }
-    };
-
-    const bitrixResponse = await axios.post(
-      BITRIX_WEBHOOK_URL,
-      bitrixPayload
-    );
-
-    console.log('✅ Link da reunião salvo no Bitrix:', {
-      cardId,
-      field: 'ufCrm67_1705518728148',
-      joinUrl
     });
 
-    // ============================
+    console.log('✅ Link da reunião salvo no Bitrix');
 
     res.json({
       success: true,
       eventId: response.data.id,
       joinUrl,
-      bitrix: bitrixResponse.data
+      convidados: emails
     });
 
   } catch (error) {
-    console.error('❌ Erro no fluxo:', error.response?.data || error.message);
+    console.error('❌ Erro Graph:', error.response?.data || error.message);
     res.status(500).json({
-      error: 'Erro ao criar reunião ou atualizar Bitrix',
+      error: 'Erro ao criar reunião',
       details: error.response?.data || error.message
     });
   }
