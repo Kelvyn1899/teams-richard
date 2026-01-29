@@ -58,7 +58,7 @@ app.post('/create-meeting', async (req, res) => {
     const token = await getAccessToken();
 
     const start = bitrixToISO(data);
-    const end = bitrixToISO(data); // mantém como estava
+    const end = bitrixToISO(data);
 
     const eventPayload = {
       subject: titulo,
@@ -103,9 +103,7 @@ app.post('/create-meeting', async (req, res) => {
       joinUrl
     });
 
-    // ============================
-    // 🔹 NOVO TRECHO – ATUALIZA BITRIX
-    // ============================
+    // 🔹 Atualiza o campo do Bitrix
     const bitrixPayload = {
       id: cardId,
       entityTypeId,
