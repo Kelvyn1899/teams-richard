@@ -9,6 +9,7 @@ const PORT = 3000;
 const TENANT_ID = process.env.TENANT_ID;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
+const BITRIX_WEBHOOK_URL = process.env.BITRIX_WEBHOOK_URL;
 
 const ORGANIZER_EMAIL = 'sistemas3.criciuma@borgesesilvaservicosmedicos.onmicrosoft.com';
 
@@ -37,9 +38,17 @@ async function getAccessToken() {
 }
 
 app.post('/create-meeting', async (req, res) => {
-  const { nome, email, data, titulo, descricao } = req.body;
+  const {
+    nome,
+    email,
+    data,
+    titulo,
+    descricao,
+    cardId,
+    entityTypeId
+  } = req.body;
 
-  if (!nome || !email || !data || !titulo) {
+  if (!nome || !email || !data || !titulo || !cardId || !entityTypeId) {
     return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
   }
 
@@ -49,7 +58,7 @@ app.post('/create-meeting', async (req, res) => {
     const token = await getAccessToken();
 
     const start = bitrixToISO(data);
-    const end = bitrixToISO(data); // depois ajustamos duração
+    const end = bitrixToISO(data); // mantém como estava
 
     const eventPayload = {
       subject: titulo,
@@ -87,21 +96,48 @@ app.post('/create-meeting', async (req, res) => {
       }
     });
 
+    const joinUrl = response.data.onlineMeeting?.joinUrl || '';
+
     console.log('✅ Reunião criada:', {
       id: response.data.id,
-      joinUrl: response.data.onlineMeeting?.joinUrl
+      joinUrl
     });
+
+    // ============================
+    // 🔹 NOVO TRECHO – ATUALIZA BITRIX
+    // ============================
+    const bitrixPayload = {
+      id: cardId,
+      entityTypeId,
+      fields: {
+        ufCrm67_1705518728148: joinUrl
+      }
+    };
+
+    const bitrixResponse = await axios.post(
+      BITRIX_WEBHOOK_URL,
+      bitrixPayload
+    );
+
+    console.log('✅ Link da reunião salvo no Bitrix:', {
+      cardId,
+      field: 'ufCrm67_1705518728148',
+      joinUrl
+    });
+
+    // ============================
 
     res.json({
       success: true,
       eventId: response.data.id,
-      joinUrl: response.data.onlineMeeting?.joinUrl
+      joinUrl,
+      bitrix: bitrixResponse.data
     });
 
   } catch (error) {
-    console.error('❌ Erro Graph:', error.response?.data || error.message);
+    console.error('❌ Erro no fluxo:', error.response?.data || error.message);
     res.status(500).json({
-      error: 'Erro ao criar reunião',
+      error: 'Erro ao criar reunião ou atualizar Bitrix',
       details: error.response?.data || error.message
     });
   }
