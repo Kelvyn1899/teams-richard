@@ -55,7 +55,13 @@ app.post('/create-meeting', async (req, res) => {
   try {
     console.log('📥 Payload recebido:', req.body);
 
-    // Suporte múltiplos e-mails
+    // Suporte a múltiplos nomes
+    const nomes = nome
+      .split(',')
+      .map(n => n.trim())
+      .filter(n => n.length > 0);
+
+    // Suporte a múltiplos e-mails
     const emails = email
       .split(',')
       .map(e => e.trim())
@@ -65,15 +71,16 @@ app.post('/create-meeting', async (req, res) => {
       return res.status(400).json({ error: 'Nenhum e-mail válido informado' });
     }
 
-    const attendees = emails.map(address => ({
+    // Associa nome + e-mail pelo índice
+    const attendees = emails.map((address, index) => ({
       emailAddress: {
         address,
-        name: nome
+        name: nomes[index] || nomes[nomes.length - 1] || 'Convidado'
       },
       type: 'required'
     }));
 
-    console.log('📧 E-mails processados:', emails);
+    console.log('👥 Convidados processados:', attendees);
 
     const token = await getAccessToken();
 
@@ -116,7 +123,7 @@ app.post('/create-meeting', async (req, res) => {
       totalAttendees: attendees.length
     });
 
-    // Preenche o campo do Bitrix com o link da reunião gerada
+    // Preenche o campo do Bitrix com o link da reunião
     await axios.post(BITRIX_WEBHOOK_URL, {
       id: cardId,
       entityTypeId,
@@ -131,7 +138,7 @@ app.post('/create-meeting', async (req, res) => {
       success: true,
       eventId: response.data.id,
       joinUrl,
-      convidados: emails
+      convidados: attendees
     });
 
   } catch (error) {
